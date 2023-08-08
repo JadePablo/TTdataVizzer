@@ -1,9 +1,19 @@
-
+/**
+ * Summary. This script retrieves hashtags from TikTok posts and compiles their occurrences.
+ *
+ * Description. This script takes a request containing a list of TikTok share-post URLs,
+ * validates the request format, ensures the URLs have valid TikTok prefixes, and then processes
+ * the URLs in batches to retrieve hashtags using an external utility function. The script then
+ * compiles and returns a response containing the occurrences of hashtags.
+ *
+*/
 
 import getHashtags from '../../../utils/lambdaHelper.js';
+import checkKey from '@/utils/apiAuth.js';
 
 const incorrectFormattingMessage = "Incorrect formatting of request: Request Body must have exactly one key 'urls' that maps to an array of strings";
 const faultyContentMessage = "Urls aren't properly formatted: One or more urls in the request aren't a valid tiktok share-post link"
+const unauthorizedAccessMessage = "You aren't allowed to use this :("
 
 /**
  * Gets Hashtags from TikTok posts.
@@ -11,10 +21,15 @@ const faultyContentMessage = "Urls aren't properly formatted: One or more urls i
  * @param {Request} request - The request body.
  * @returns {Response} A response indicating the outcome of the operation.
  */
+
 export const PUT = async (request) => {
   try {
       const uuJson = await request.json();
       
+      if(!checkKey(uuJson)) {
+        return new Response(unauthorizedAccessMessage,{status:400})
+      }
+
       //check that uuJson (user-uploaded json) is of correct format
       if (!validateFormatting(uuJson)) {
         return new Response(incorrectFormattingMessage,{status:400});
@@ -47,7 +62,7 @@ export const PUT = async (request) => {
  */
 function validateFormatting(request) {
   const keys = Object.keys(request);
-  if (keys.length !== 1 || keys[0] !== 'urls') {
+  if (keys.length !== 2 || keys[1] !== 'urls') {
     return false;
   }
 
@@ -115,7 +130,6 @@ function processBatch(request) {
  * @returns {Object} An object mapping hashtags to their occurrence counts.
  */
 function mapOccurences(hashtagsData) {
-  console.log('mapping occurences...');
 
   try {
     const hashtagOccurrences = {};
