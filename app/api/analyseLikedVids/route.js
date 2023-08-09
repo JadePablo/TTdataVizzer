@@ -40,15 +40,15 @@ export const PUT = async (request) => {
         return new Response(faultyContentMessage,{status:400})
       }
 
-      //call lambda function(s)
+      //equally divide request payload into 10 batches
       const batches = processBatch(uuJson);
 
       // Process batches concurrently and pool the results
       const results = await Promise.all(batches.map(batch => compileHashtags(batch)));
 
-      const hashtagOccurences = mapOccurences(results);
+      const compiledResults = mapOccurences(results);
 
-      return new Response(JSON.stringify(hashtagOccurences),{status:200});
+      return new Response(JSON.stringify(compiledResults),{status:200});
   } catch (error) {
       return new Response("Failed to get hashtags", { status: 500 });
   }
@@ -123,32 +123,43 @@ function processBatch(request) {
   return subArrays;
 }
 
-/**
- * Maps the occurrences of hashtags from the provided data.
- *
- * @param {Array} hashtagsData - An array of objects containing hashtags data.
- * @returns {Object} An object mapping hashtags to their occurrence counts.
- */
-function mapOccurences(hashtagsData) {
+function mapOccurences(data) {
+  const hashtagCounts = new Map();
+  const creatorCounts = new Map();
 
-  try {
-    const hashtagOccurrences = {};
+  // Loop through each object in the data array
+  for (const entry of data) {
+    // Count hashtags
+    for (const hashtag of entry.hashtags) {
+      if (hashtagCounts.has(hashtag)) {
+        hashtagCounts.set(hashtag, hashtagCounts.get(hashtag) + 1);
+      } else {
+        hashtagCounts.set(hashtag, 1);
+      }
+    }
 
-    hashtagsData.forEach(batch => {
-      const batchHashtags = batch.hashtags;
-
-      batchHashtags.forEach(hashtag => {
-        if (hashtagOccurrences[hashtag]) {
-          hashtagOccurrences[hashtag] += 1; // Increment occurrence count
-        } else {
-          hashtagOccurrences[hashtag] = 1; // Initialize occurrence count
-        }
-      });
-    });
-
-    return hashtagOccurrences;
-  } catch (err) {
-    console.error('Error in mapOccurences:', err);
-    throw err; // Rethrow the error to be caught by the caller
+    // Count creators
+    for (const creator of entry.creators) {
+      if (creatorCounts.has(creator)) {
+        creatorCounts.set(creator, creatorCounts.get(creator) + 1);
+      } else {
+        creatorCounts.set(creator, 1);
+      }
+    }
   }
+
+  // Convert maps to arrays of objects for sorting
+  const sortedHashtags = Array.from(hashtagCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag, count]) => ({ tag, count }));
+
+  const sortedCreators = Array.from(creatorCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([creator, count]) => ({ creator, count }));
+
+  // Return the top 5 hashtags and creators
+  const top5Hashtags = sortedHashtags.slice(0, 5);
+  const top5Creators = sortedCreators.slice(0, 5);
+
+  return [top5Hashtags, top5Creators];
 }
